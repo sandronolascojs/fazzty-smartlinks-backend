@@ -1,19 +1,39 @@
 import Link from '../models/links.model.js'
 import User from '../models/users.model.js'
+import { customLabels } from '../utils/customLabels.utils.js'
 import { responseHandler } from '../utils/responseHandler.utils.js'
 
 export const getLinks = async (req, res, next) => {
+  const { page, limit, name, slug, artists, owner } = req.query
   const { user } = req
+
+  const options = {
+    page: parseInt(page) || 1,
+    limit: parseInt(limit) || 10,
+    sort: { createdAt: -1 },
+    customLabels
+  }
+
   try {
     const searchUser = await User.findById(user.id)
 
     if (!searchUser.isAdmin) {
-      const links = await Link.find({ user: user.id })
+      if (name || slug || artists) {
+        const links = await Link.paginate({ $or: [{ user: user.id }, { name }, { publicUrl: slug }, { artists }] }, options)
+        return responseHandler(res, false, 200, 'Success', links)
+      }
+      const links = await Link.paginate({ user: user.id }, options)
       return responseHandler(res, false, 200, 'Success', links)
     } else if (!searchUser) {
       return responseHandler(res, true, 401, 'Unauthorized')
     }
-    const links = await Link.find()
+
+    if (name || slug || artists || owner) {
+      const links = await Link.paginate({ $or: [{ user: owner }, { name }, { publicUrl: slug }, { artists }] }, options)
+      return responseHandler(res, false, 200, 'Success', links)
+    }
+
+    const links = await Link.paginate({}, options)
 
     return responseHandler(res, false, 200, 'Success.', links)
   } catch (err) {
@@ -112,18 +132,26 @@ export const deleteLink = async (req, res, next) => {
 }
 
 export const findLinkMostPopular = async (req, res, next) => {
-  try {
-    const user = req.user
+  const { page, limit, name, slug, artists, owner } = req.query
+  const { user } = req
 
+  const options = {
+    page: parseInt(page) || 1,
+    limit: parseInt(limit) || 10,
+    sort: { visits: -1 },
+    customLabels
+  }
+  try {
     const searchUser = await User.findById(user.id)
 
     if (!searchUser.isAdmin) {
-      const link = await Link.find({ userId: searchUser._id }).sort({ visits: -1 })
+      const link = await Link.paginate({ $or: [{ userId: user.id }, { name }, { publicUrl: slug }, { artists }] }, options)
       return responseHandler(res, false, 200, 'Success', link)
     }
 
-    const result = await Link.find().sort({ visits: -1 })
-    return responseHandler(res, false, 200, 'Success', result)
+    const data = await Link.paginate({ $or: [{ userId: owner }, { name }, { publicUrl: slug }, { artists }] }, options)
+
+    return responseHandler(res, false, 200, 'Success', data)
   } catch (err) {
     next(err)
   }

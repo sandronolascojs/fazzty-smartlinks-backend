@@ -1,22 +1,37 @@
 import User from '../models/users.model.js'
 import { encryptPassword } from '../utils/bcrypt.utils.js'
 import { responseHandler } from '../utils/responseHandler.utils.js'
+import { customLabels } from '../utils/customLabels.utils.js'
 
 export const getAllUsers = async (req, res, next) => {
+  const { page, limit, username, email } = req.query
+
+  const options = {
+    page: parseInt(page) || 1,
+    limit: parseInt(limit) || 10,
+    sort: { createdAt: -1 },
+    customLabels,
+    populate: [
+      {
+        path: 'links',
+        select: '_id'
+      }
+    ],
+    select: '-hashPassword -updatedAt'
+  }
+
   try {
-    const users = await User.find({}, {
-      username: true,
-      email: true,
-      links: true,
-      createdAt: true,
-      _id: true,
-      isAdmin: true
-    }).populate('links', {
-      _id: true
-    })
-    if (users.length <= 0) {
-      return responseHandler(res, true, 404, 'No users found.')
+    if (username || email) {
+      const user = await User.paginate({ $or: [{ username }, { email }] }, options)
+
+      if (user.data.length <= 0) return responseHandler(res, true, 404, 'User not found')
+
+      return responseHandler(res, false, 200, 'Success', user)
     }
+
+    const users = await User.paginate({}, options)
+
+    if (users.data.length <= 0) return responseHandler(res, true, 404, 'No users found.')
 
     return responseHandler(res, false, 200, 'Success', users)
   } catch (err) {
@@ -41,9 +56,7 @@ export const getOneUser = async (req, res, next) => {
       explicit: true,
       createdAt: true
     })
-    if (!user) {
-      return responseHandler(res, true, 404, 'No user found.')
-    }
+    if (!user) return responseHandler(res, true, 404, 'No user found.')
 
     return responseHandler(res, false, 200, 'Success', user)
   } catch (err) {
@@ -56,9 +69,7 @@ export const createUser = async (req, res, next) => {
     const { username, password, email, isAdmin } = req.body
     const validation = await User.find({ $or: [{ email }, { username }] })
 
-    if (validation.length <= 0) {
-      return responseHandler(res, true, 409, 'Username or email already exists.')
-    }
+    if (validation.length <= 0) return responseHandler(res, true, 409, 'Username or email already exists.')
 
     const hashPassword = await encryptPassword(password)
     const user = {
@@ -87,9 +98,7 @@ export const updateUser = async (req, res, next) => {
     const { username, password, email, isAdmin } = req.body
 
     const user = await User.findById(userId)
-    if (!user) {
-      return responseHandler(res, true, 404, 'User not found.')
-    }
+    if (!user) return responseHandler(res, true, 404, 'User not found.')
 
     const hashPassword = await encryptPassword(password)
     const updatedUser = {
@@ -117,11 +126,8 @@ export const deleteUser = async (req, res, next) => {
   try {
     const { userId } = req.params
     const user = await User.findById(userId)
-    if (!user) {
-      return res.status(404).json({
-        message: 'User not found'
-      })
-    }
+    if (!user) return responseHandler(res, true, 404, 'User not found.')
+
     const deletedUser = await User.findByIdAndDelete(userId)
 
     const data = {
