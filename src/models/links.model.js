@@ -11,7 +11,14 @@ const linkSchema = new Schema({
     required: true
   },
   previewUrl: Object,
-  links: Object,
+  links: [{
+    name: String,
+    url: String,
+    visible: {
+      type: Boolean,
+      default: true
+    }
+  }],
   customLinks: [{
     name: String,
     url: String,

@@ -3,7 +3,8 @@ import axios from 'axios'
 export const itunesTrack = async (req, res, songTrack) => {
   try {
     const itunesURL = `https://itunes.apple.com/search?term=${songTrack}&media=music&entity=musicTrack,album,mix,song&limit=1`
-    const itunesResponse = await axios.get(itunesURL)
+    const itunesLinkEncode = encodeURI(itunesURL)
+    const itunesResponse = await axios.get(itunesLinkEncode)
 
     if (itunesResponse.data.results.length === 0) {
       return null

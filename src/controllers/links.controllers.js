@@ -9,7 +9,7 @@ export const getLinks = async (req, res, next) => {
 
   const options = {
     page: parseInt(page) || 1,
-    limit: parseInt(limit) || 10,
+    limit: parseInt(limit) || 12,
     sort: { createdAt: -1 },
     customLabels
   }

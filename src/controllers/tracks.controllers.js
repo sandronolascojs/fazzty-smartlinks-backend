@@ -18,7 +18,52 @@ export const getTrack = async (req, res, next) => {
       const songTrack = artistName ? artistName + ' ' + trackName : null
       const itunes = await itunesTrack(req, res, songTrack)
       const youtube = await youtubeTrack(req, res, songTrack)
+      if (itunes === undefined || youtube === undefined) {
+        const track = {
+          artists: spotify.artists || deezer.artists || napster.artists || null,
+          name: spotify.name || deezer.name || napster.name || null,
+          previewUrl: {
+            spotify: spotify.preview || null,
+            deezer: deezer.preview || null,
+            napster: napster.preview || null
+          },
+          links: [
+            {
+              name: 'Spotify',
+              url: spotify.url || null,
+              visible: true
+            },
+            {
+              name: 'Deezer',
+              url: deezer.url || null,
+              visible: true
+            },
+            {
+              name: 'Napster',
+              url: napster.url || null,
+              visible: true
+            },
+            {
+              name: 'iTunes',
+              url: null,
+              visible: false
+            },
+            {
+              name: 'YouTube',
+              url: null,
+              visible: false
+            }
+          ],
+          images: {
+            spotify: spotify.albumImage || null,
+            deezer: deezer.albumImage || null
+          },
+          releaseDate: spotify.releaseDate || deezer.releaseDate || null,
+          explicit: spotify.explicit
+        }
 
+        return responseHandler(res, true, 200, 'Success', track)
+      }
       const track = {
         artists: spotify.artists || deezer.artists || napster.artists || null,
         name: spotify.name || deezer.name || napster.name || null,
@@ -27,13 +72,33 @@ export const getTrack = async (req, res, next) => {
           deezer: deezer.preview || null,
           napster: napster.preview || null
         },
-        links: {
-          spotify: spotify.url || null,
-          deezer: deezer.url || null,
-          napster: napster.url || null,
-          itunes: itunes.url || null,
-          youtube: youtube.url || null
-        },
+        links: [
+          {
+            name: 'Spotify',
+            url: spotify.url || null,
+            visible: true
+          },
+          {
+            name: 'Deezer',
+            url: deezer.url || null,
+            visible: true
+          },
+          {
+            name: 'Napster',
+            url: napster.url || null,
+            visible: true
+          },
+          {
+            name: 'iTunes',
+            url: itunes.url || null,
+            visible: true
+          },
+          {
+            name: 'YouTube',
+            url: youtube.url || null,
+            visible: true
+          }
+        ],
         images: {
           spotify: spotify.albumImage || null,
           deezer: deezer.albumImage || null
