@@ -16,11 +16,13 @@ export const publicLinks = async (req, res, next) => {
         explicit: link.explicit
       }
 
-      /* const visits = {
+      // const date = new Date()
+      // const yesterday = date.setDate(date.getDate() - 1)
+      const visits = {
         visits: [...link.visits, new Date()]
       }
 
-      await Link.findOneAndUpdate({ _id: link._id }, visits) */
+      await Link.findOneAndUpdate({ _id: link._id }, visits)
       return responseHandler(res, false, 200, 'Success', data)
     } else {
       return responseHandler(res, true, 404, 'Link not found')

@@ -4,47 +4,174 @@ import { customLabels } from '../utils/customLabels.utils.js'
 import { responseHandler } from '../utils/responseHandler.utils.js'
 
 export const getLinks = async (req, res, next) => {
-  const { page, limit, name, slug, artists, owner } = req.query
+  const { page = 1, limit, track, slug, owner } = req.query
   const { user } = req
 
-  const options = {
-    page: parseInt(page) || 1,
-    limit: parseInt(limit) || 12,
-    sort: { createdAt: -1 },
-    customLabels
-  }
-
   try {
+    // search user in db
     const searchUser = await User.findById(user.id)
 
-    if (!searchUser.isAdmin) {
-      if (name || slug || artists) {
-        const links = await Link.paginate({ $or: [{ user: user.id }, { name }, { publicUrl: slug }, { artists }] }, options)
-        return responseHandler(res, false, 200, 'Success', links)
-      }
-      const links = await Link.paginate({ user: user.id }, options)
-      return responseHandler(res, false, 200, 'Success', links)
-    } else if (!searchUser) {
+    /// if user not found return unauthorized
+    if (!searchUser) {
       return responseHandler(res, true, 401, 'Unauthorized')
     }
 
-    if (name || slug || artists || owner) {
-      const links = await Link.paginate({ $or: [{ user: owner }, { name }, { publicUrl: slug }, { artists }] }, options)
-      return responseHandler(res, false, 200, 'Success', links)
+    // if user is not admin restrict search to user links
+    if (!searchUser.isAdmin) {
+      // if user is not admin and track or artist name is provided
+      if (track) {
+        const links = await Link.find({
+          $text: { $search: track },
+          user: user.id
+        })
+          .limit(limit * 1)
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .exec()
+        const count = await Link.count({
+          $text: { $search: track },
+          user: user.id
+        })
+
+        const data = {
+          data: links,
+          totalResults: count,
+          totalPages: Math.ceil(count / limit),
+          currentPage: parseInt(page)
+        }
+
+        return responseHandler(res, false, 200, 'Success', data)
+      }
+      // if user is not admin and slug is provided
+      if (slug) {
+        const links = await Link.find({ publicUrl: slug, user: user.id })
+          .limit(limit * 1)
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .exec()
+
+        const count = await Link.count({ publicUrl: slug, user: user.id })
+
+        const data = {
+          data: links,
+          totalResults: count,
+          totalPages: Math.ceil(count / limit),
+          currentPage: parseInt(page)
+        }
+
+        return responseHandler(res, false, 200, 'Success', data)
+      }
+      // if user is not admin and request all links
+      const links = await Link.find({ user: searchUser._id })
+        .limit(limit * 1)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .exec()
+      const count = await Link.count({ user: user.id })
+
+      const data = {
+        data: links,
+        totalResults: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page)
+      }
+
+      return responseHandler(res, false, 200, 'Success', data)
     }
 
-    const links = await Link.paginate({}, options)
+    // if user is admin and track or artist name is provided
+    if (track) {
+      const links = await Link.find({ $text: { $search: track } })
+        .limit(limit * 1)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .exec()
 
-    return responseHandler(res, false, 200, 'Success.', links)
+      const count = await Link.count({ $text: { $search: track } })
+
+      const data = {
+        data: links,
+        totalResults: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page)
+      }
+
+      return responseHandler(res, false, 200, 'Success', data)
+    }
+
+    // if user is admin and slug or owner id is provided
+    if (slug || owner) {
+      const links = await Link.find({
+        $or: [{ user: owner }, { publicUrl: slug }]
+      })
+        .limit(limit * 1)
+        .skip((page - 1) * limit)
+        .exec()
+
+      const count = await Link.count({
+        $or: [{ user: owner }, { publicUrl: slug }]
+      })
+
+      const data = {
+        data: links,
+        totalResults: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: parseInt(page)
+      }
+
+      return responseHandler(res, false, 200, 'Success', data)
+    }
+
+    // if user is admin and request all links
+    const links = await Link.find({})
+      .limit(limit * 1)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .exec()
+
+    const count = await Link.count({})
+
+    const data = {
+      data: links,
+      totalResults: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: parseInt(page)
+    }
+
+    return responseHandler(res, false, 200, 'Success', data)
   } catch (err) {
     next(err)
   }
 }
+
 export const getSingleLink = async (req, res, next) => {
   const { id } = req.params
+
+  const { user } = req
+
   try {
+    // search user in db and link
+    const searchUser = await User.findById(user.id)
     const link = await Link.findById(id)
-    link ? responseHandler(res, false, 200, 'Success', link) : responseHandler(res, true, 404, 'Link not found.')
+
+    // if user not found return unauthorized
+    if (!searchUser) {
+      return responseHandler(res, true, 401, 'Unauthorized')
+    }
+
+    // if user is not the owner or isn't admin return unauthorized
+    if (
+      searchUser._id.toString() !== link.user.toString() &&
+      !searchUser.isAdmin
+    ) {
+      return responseHandler(res, true, 401, 'Unauthorized')
+    }
+
+    if (!link) {
+      return responseHandler(res, true, 404, 'Link not found')
+    }
+
+    return responseHandler(res, false, 200, 'Success', link)
   } catch (err) {
     next(err)
   }
@@ -55,7 +182,21 @@ export const saveLink = async (req, res, next) => {
     const { userId } = req.body
     const user = await User.findById(userId)
 
-    const { artists, name, previewUrl, links, customLinks, images, releaseDate, explicit, slug } = req.body
+    if (!user) {
+      return responseHandler(res, true, 401, 'Unauthorized')
+    }
+
+    const {
+      artists,
+      name,
+      previewUrl,
+      links,
+      customLinks,
+      images,
+      releaseDate,
+      explicit,
+      slug
+    } = req.body
 
     const compareSlug = slug.toLowerCase().replace(/ /g, '-')
     const findSlug = await Link.findOne({ publicUrl: compareSlug })
@@ -89,7 +230,7 @@ export const saveLink = async (req, res, next) => {
 
 export const updateLink = async (req, res, next) => {
   const { id } = req.params
-  const userId = req.user.id
+  const user = req.user.id
 
   try {
     const updatedData = {
@@ -98,9 +239,16 @@ export const updateLink = async (req, res, next) => {
     }
 
     const link = await Link.findById(id)
-    const user = await User.findById(userId)
+    const searchUser = await User.findById(user)
 
-    if (user.isAdmin === false && link.user.toString() !== userId) {
+    if (!searchUser) {
+      return responseHandler(res, true, 401, 'Unauthorized')
+    }
+
+    if (
+      searchUser._id.toString() !== link.user.toString() &&
+      !searchUser.isAdmin
+    ) {
       return responseHandler(res, true, 401, 'Unauthorized')
     }
 
@@ -115,12 +263,19 @@ export const updateLink = async (req, res, next) => {
 
 export const deleteLink = async (req, res, next) => {
   const { id } = req.params
-  const userId = req.user.id
+  const user = req.user.id
   try {
     const link = await Link.findById(id)
-    const user = await User.findById(userId)
+    const searchUser = await User.findById(user)
 
-    if (user.isAdmin === false && link.user.toString() !== userId) {
+    if (!searchUser) {
+      return responseHandler(res, true, 401, 'Unauthorized')
+    }
+
+    if (
+      searchUser._id.toString() !== link.user.toString() &&
+      !searchUser.isAdmin
+    ) {
       return responseHandler(res, true, 401, 'Unauthorized')
     }
 
@@ -145,11 +300,24 @@ export const findLinkMostPopular = async (req, res, next) => {
     const searchUser = await User.findById(user.id)
 
     if (!searchUser.isAdmin) {
-      const link = await Link.paginate({ $or: [{ userId: user.id }, { name }, { publicUrl: slug }, { artists }] }, options)
+      const link = await Link.paginate(
+        {
+          $or: [
+            { userId: user.id },
+            { name },
+            { publicUrl: slug },
+            { artists }
+          ]
+        },
+        options
+      )
       return responseHandler(res, false, 200, 'Success', link)
     }
 
-    const data = await Link.paginate({ $or: [{ userId: owner }, { name }, { publicUrl: slug }, { artists }] }, options)
+    const data = await Link.paginate(
+      { $or: [{ userId: owner }, { name }, { publicUrl: slug }, { artists }] },
+      options
+    )
 
     return responseHandler(res, false, 200, 'Success', data)
   } catch (err) {
