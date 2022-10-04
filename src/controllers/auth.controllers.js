@@ -61,7 +61,7 @@ export const signIn = async (req, res, next) => {
       token
     }
 
-    return responseHandler(res, true, 200, 'Success', data)
+    return responseHandler(res, false, 200, 'Success', data)
   } catch (err) {
     next(err)
   }

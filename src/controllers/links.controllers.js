@@ -154,9 +154,15 @@ export const getSingleLink = async (req, res, next) => {
     const searchUser = await User.findById(user.id)
     const link = await Link.findById(id)
 
+    console.log(link)
+
     // if user not found return unauthorized
     if (!searchUser) {
       return responseHandler(res, true, 401, 'Unauthorized')
+    }
+
+    if (!link) {
+      return responseHandler(res, true, 404, 'Link not found')
     }
 
     // if user is not the owner or isn't admin return unauthorized
@@ -165,10 +171,6 @@ export const getSingleLink = async (req, res, next) => {
       !searchUser.isAdmin
     ) {
       return responseHandler(res, true, 401, 'Unauthorized')
-    }
-
-    if (!link) {
-      return responseHandler(res, true, 404, 'Link not found')
     }
 
     return responseHandler(res, false, 200, 'Success', link)
